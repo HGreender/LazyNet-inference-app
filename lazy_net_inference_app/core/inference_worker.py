@@ -14,7 +14,20 @@ from pathlib import Path
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from fast_ml_tools import LazyNet
-from fast_ml_tools.ml.augmentations import get_manga_panel_bubble_augmentation
+from fast_ml_tools.ml.augmentations import (
+    get_manga_panel_bubble_augmentation,
+    get_imagenet_encoder_augmentation,
+)
+
+
+def get_model_in_channels(model) -> int:
+    """Определяет количество входных каналов модели (по первому конволюционному слою энкодера)."""
+    if hasattr(model, 'encoder') and hasattr(model.encoder, '_conv_stem'):
+        return model.encoder._conv_stem.in_channels
+    for module in model.modules():
+        if isinstance(module, torch.nn.Conv2d):
+            return module.in_channels
+    return 3
 
 
 class InferenceWorker(QThread):
@@ -94,6 +107,22 @@ class InferenceWorker(QThread):
             self.log_message.emit(f"Загрузка весов из: {self.model_path}")
             self.lazynet.load_weights(self.model_path)
             self.log_message.emit("Модель успешно загружена")
+
+            # Выбираем валидационный пайплайн под фактическое число входных каналов модели:
+            # 1-канальная — grayscale, 3-канальная — RGB с нормализацией ImageNet
+            in_channels = get_model_in_channels(self.lazynet.model)
+            if in_channels == 1:
+                self.lazynet.val_augmentation = get_manga_panel_bubble_augmentation(
+                    phase='valid', size=(512, 512)
+                )
+                self.log_message.emit("Модель: 1 канал (grayscale) — пайплайн grayscale")
+            else:
+                self.lazynet.val_augmentation = get_imagenet_encoder_augmentation(
+                    phase='valid', size=(512, 512)
+                )
+                self.log_message.emit(
+                    f"Модель: {in_channels} канала(ов) (RGB) — пайплайн с нормализацией ImageNet"
+                )
 
             # Проверяем отмену перед началом инференса
             if self._is_cancelled:
