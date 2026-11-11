@@ -1,18 +1,20 @@
 """Основное окно приложения для инференса LazyNet."""
 import os
 import sys
+import subprocess
 from pathlib import Path
 from PyQt6.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QMainWindow, QApplication, QWidget, QVBoxLayout, QHBoxLayout,
     QGroupBox, QLabel, QLineEdit, QPushButton, QFileDialog,
     QSpinBox, QDoubleSpinBox, QCheckBox, QComboBox, QFormLayout,
     QTextEdit, QProgressBar, QSplitter, QMessageBox,
     QColorDialog, QScrollArea, QSizePolicy
 )
-from PyQt6.QtCore import Qt, QSettings
+from PyQt6.QtCore import Qt, QSettings, QProcess
 from PyQt6.QtGui import QFont
 
 from core.inference_worker import InferenceWorker
+from core.update_worker import UpdateWorker, APP_DIR
 from core.config import (
     DEFAULT_THRESHOLD, DEFAULT_OVERLAY_COLOR, DEFAULT_OVERLAY_STRENGTH,
     DEFAULT_SAVE_MASKS, DEFAULT_SAVE_CONCAT, DEFAULT_SAVE_OVERLAY,
@@ -84,9 +86,15 @@ class MainWindow(QMainWindow):
         header_layout.addWidget(title_block)
         header_layout.addStretch()
 
-        version_chip = QLabel("v1.0")
-        version_chip.setProperty("role", "chip")
-        header_layout.addWidget(version_chip)
+        self.update_btn = QPushButton("⟳  Проверить обновления")
+        self.update_btn.setProperty("kind", "ghost")
+        self.update_btn.setToolTip("Проверить новые коммиты в ветке main и подтянуть их")
+        self.update_btn.clicked.connect(self.check_for_updates)
+        header_layout.addWidget(self.update_btn)
+
+        self.version_chip = QLabel("v1.0")
+        self.version_chip.setProperty("role", "chip")
+        header_layout.addWidget(self.version_chip)
 
         root_layout.addWidget(header)
 
@@ -509,6 +517,66 @@ class MainWindow(QMainWindow):
         self.overlay_color = rgb
         self._style_overlay_color_button()
         self.overlay_color_label.setText(f"RGB: {rgb}")
+
+    # === Обновление приложения ===
+
+    def check_for_updates(self):
+        """Запускает проверку обновлений в фоновом потоке."""
+        self.update_btn.setEnabled(False)
+        self.statusBar().showMessage("Проверка обновлений…")
+        self._update_worker = UpdateWorker()
+        self._update_worker.log_message.connect(self.log)
+        self._update_worker.result.connect(self._on_update_result)
+        self._update_worker.start()
+
+    def _on_update_result(self, status: str, message: str, count: int):
+        """Обрабатывает результат проверки обновлений."""
+        self.update_btn.setEnabled(True)
+
+        if status == "up_to_date":
+            self.log("Приложение актуально")
+            self.statusBar().showMessage("Приложение актуально")
+            return
+
+        if status == "updated":
+            self.log(message)
+            self._refresh_version_chip()
+            self.statusBar().showMessage(message)
+            reply = QMessageBox.question(
+                self,
+                "Обновление завершено",
+                f"{message}.\n"
+                "Чтобы изменения вступили в силу, приложение нужно перезапустить.\n\n"
+                "Перезапустить приложение сейчас?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes,
+            )
+            if reply == QMessageBox.StandardButton.Yes:
+                self._restart_app()
+            return
+
+        # Ошибка
+        self.log(f"Ошибка обновления: {message}")
+        self.statusBar().showMessage("Ошибка обновления")
+        QMessageBox.critical(self, "Ошибка обновления", message)
+
+    def _refresh_version_chip(self):
+        """Обновляет чип версии хэшем текущего коммита."""
+        try:
+            proc = subprocess.run(
+                ["git", "rev-parse", "--short", "HEAD"],
+                cwd=APP_DIR, capture_output=True, text=True, timeout=10,
+            )
+            if proc.returncode == 0:
+                self.version_chip.setText(f"v1.0 · {proc.stdout.strip()}")
+        except Exception:
+            pass
+
+    def _restart_app(self):
+        """Перезапускает приложение: запускает новый процесс и закрывает текущий."""
+        self.log("Перезапуск приложения…")
+        QProcess.startDetached(sys.executable, [str(APP_DIR / "main.py")], str(APP_DIR))
+        QApplication.instance().quit()
 
     # === Методы управления моделью ===
 
