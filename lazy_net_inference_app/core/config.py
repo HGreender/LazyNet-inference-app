@@ -25,5 +25,16 @@ AVAILABLE_MODELS = [
 # Модель по умолчанию
 DEFAULT_MODEL_NAME = 'efficientnetb4_unet++_1ch'
 
+# Доступные функции аугментации (fast_ml_tools.ml.augmentations)
+AVAILABLE_AUGMENTATIONS = [
+    'get_manga_panel_bubble_augmentation',
+    'get_grayscale_imagenet_augmentation',
+    'get_imagenet_encoder_augmentation',
+    'get_lungs_imagenet_encoder_augmentation',
+]
+
+# Функция аугментации по умолчанию
+DEFAULT_AUGMENTATION = 'get_manga_panel_bubble_augmentation'
+
 # Путь к файлу конфигурации
 CONFIG_FILE = "config.json"

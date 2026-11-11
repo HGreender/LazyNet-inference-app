@@ -16,8 +16,21 @@ from PyQt6.QtCore import QThread, pyqtSignal
 from fast_ml_tools import LazyNet
 from fast_ml_tools.ml.augmentations import (
     get_manga_panel_bubble_augmentation,
+    get_grayscale_imagenet_augmentation,
     get_imagenet_encoder_augmentation,
+    get_lungs_imagenet_encoder_augmentation,
 )
+
+# Реестр доступных функций аугментации (имя → функция)
+AUGMENTATION_REGISTRY = {
+    'get_manga_panel_bubble_augmentation': get_manga_panel_bubble_augmentation,
+    'get_grayscale_imagenet_augmentation': get_grayscale_imagenet_augmentation,
+    'get_imagenet_encoder_augmentation': get_imagenet_encoder_augmentation,
+    'get_lungs_imagenet_encoder_augmentation': get_lungs_imagenet_encoder_augmentation,
+}
+
+# Функция аугментации по умолчанию
+DEFAULT_AUGMENTATION_NAME = 'get_manga_panel_bubble_augmentation'
 
 
 def get_model_in_channels(model) -> int:
@@ -46,6 +59,7 @@ class InferenceWorker(QThread):
         input_dir: str,
         output_dir: str,
         model_name: str = 'efficientnetb4_unet++_1ch',
+        augmentation_fn_name: str = DEFAULT_AUGMENTATION_NAME,
         threshold: float = 0.5,
         overlay_color: tuple = (0, 255, 0),
         overlay_strength: float = 0.5,
@@ -63,6 +77,7 @@ class InferenceWorker(QThread):
         self.input_dir = input_dir
         self.output_dir = output_dir
         self.model_name = model_name
+        self.augmentation_fn_name = augmentation_fn_name
         self.threshold = threshold
         self.overlay_color = overlay_color
         self.overlay_strength = overlay_strength
@@ -81,15 +96,35 @@ class InferenceWorker(QThread):
         self._is_cancelled = True
         self.log_message.emit("Запрошена отмена операции...")
 
+    def _detect_pipeline_channels(self, aug_fn) -> int | None:
+        """Определяет число выходных каналов пайплайна аугментации на тестовом изображении."""
+        import numpy as np
+        try:
+            dummy = np.full((64, 64, 3), 128, dtype=np.uint8)
+            sample = aug_fn(phase='valid', size=(512, 512))(image=dummy)['image']
+            return sample.shape[0]
+        except Exception:
+            return None
+
     def run(self):
         """Основной метод выполнения в фоновом потоке."""
         try:
             self.log_message.emit(f"Инициализация модели: {self.model_name}")
 
+            # Разрешаем выбранную функцию аугментации
+            aug_fn = AUGMENTATION_REGISTRY.get(self.augmentation_fn_name)
+            if aug_fn is None:
+                self.log_message.emit(
+                    f"Неизвестная функция аугментации: {self.augmentation_fn_name}. "
+                    f"Используем по умолчанию: {DEFAULT_AUGMENTATION_NAME}"
+                )
+                aug_fn = AUGMENTATION_REGISTRY[DEFAULT_AUGMENTATION_NAME]
+            self.log_message.emit(f"Аугментация: {aug_fn.__name__}")
+
             # Создаем экземпляр LazyNet
             self.lazynet = LazyNet(
                 model_name=self.model_name,
-                augmentation_fn=get_manga_panel_bubble_augmentation,
+                augmentation_fn=aug_fn,
                 device_id=0,
                 verbose=False
             )
@@ -108,20 +143,34 @@ class InferenceWorker(QThread):
             self.lazynet.load_weights(self.model_path)
             self.log_message.emit("Модель успешно загружена")
 
-            # Выбираем валидационный пайплайн под фактическое число входных каналов модели:
-            # 1-канальная — grayscale, 3-канальная — RGB с нормализацией ImageNet
+            # Выбираем валидационный пайплайн: используем выбранную функцию аугментации,
+            # а если число каналов не совпадает с числом входных каналов модели —
+            # откатываемся к автоматическому выбору (1-канальная — grayscale,
+            # 3-канальная — RGB с нормализацией ImageNet)
             in_channels = get_model_in_channels(self.lazynet.model)
-            if in_channels == 1:
-                self.lazynet.val_augmentation = get_manga_panel_bubble_augmentation(
-                    phase='valid', size=(512, 512)
-                )
-                self.log_message.emit("Модель: 1 канал (grayscale) — пайплайн grayscale")
-            else:
-                self.lazynet.val_augmentation = get_imagenet_encoder_augmentation(
-                    phase='valid', size=(512, 512)
-                )
+            pipeline_channels = self._detect_pipeline_channels(aug_fn)
+            if pipeline_channels == in_channels:
+                self.lazynet.val_augmentation = aug_fn(phase='valid', size=(512, 512))
                 self.log_message.emit(
-                    f"Модель: {in_channels} канала(ов) (RGB) — пайплайн с нормализацией ImageNet"
+                    f"Модель: {in_channels} канал(а/ов) — выбран пайплайн {aug_fn.__name__}"
+                )
+            else:
+                if in_channels == 1:
+                    self.lazynet.val_augmentation = get_manga_panel_bubble_augmentation(
+                        phase='valid', size=(512, 512)
+                    )
+                    self.log_message.emit("Модель: 1 канал (grayscale) — пайплайн grayscale")
+                else:
+                    self.lazynet.val_augmentation = get_imagenet_encoder_augmentation(
+                        phase='valid', size=(512, 512)
+                    )
+                    self.log_message.emit(
+                        f"Модель: {in_channels} канала(ов) (RGB) — пайплайн с нормализацией ImageNet"
+                    )
+                self.log_message.emit(
+                    f"Внимание: выбранная аугментация {aug_fn.__name__} несовместима "
+                    f"с числом каналов модели ({in_channels}). "
+                    f"Применен автоматический выбор пайплайна."
                 )
 
             # Проверяем отмену перед началом инференса

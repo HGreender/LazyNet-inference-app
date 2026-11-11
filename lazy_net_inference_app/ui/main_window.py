@@ -17,7 +17,9 @@ from core.config import (
     DEFAULT_THRESHOLD, DEFAULT_OVERLAY_COLOR, DEFAULT_OVERLAY_STRENGTH,
     DEFAULT_SAVE_MASKS, DEFAULT_SAVE_CONCAT, DEFAULT_SAVE_OVERLAY,
     DEFAULT_BATCH_SIZE, DEFAULT_NUM_WORKERS, DEFAULT_SAVE_WORKERS,
-    AVAILABLE_MODELS, DEFAULT_MODEL_NAME, CONFIG_FILE
+    AVAILABLE_MODELS, DEFAULT_MODEL_NAME,
+    AVAILABLE_AUGMENTATIONS, DEFAULT_AUGMENTATION,
+    CONFIG_FILE
 )
 from utils.helpers import (
     validate_model_path, validate_image_folder, validate_output_folder,
@@ -84,6 +86,15 @@ class MainWindow(QMainWindow):
         self.model_name_combo.setCurrentText(DEFAULT_MODEL_NAME)
         model_name_layout.addWidget(self.model_name_combo)
         model_layout.addLayout(model_name_layout)
+
+        # Выбор функции аугментаций
+        augmentation_layout = QHBoxLayout()
+        augmentation_layout.addWidget(QLabel("Аугментация:"))
+        self.augmentation_combo = QComboBox()
+        self.augmentation_combo.addItems(AVAILABLE_AUGMENTATIONS)
+        self.augmentation_combo.setCurrentText(DEFAULT_AUGMENTATION)
+        augmentation_layout.addWidget(self.augmentation_combo)
+        model_layout.addLayout(augmentation_layout)
 
         # Путь к файлу модели
         model_path_layout = QHBoxLayout()
@@ -288,6 +299,9 @@ class MainWindow(QMainWindow):
             self.model_name_combo.setCurrentText(
                 config.get('model_name', DEFAULT_MODEL_NAME)
             )
+            self.augmentation_combo.setCurrentText(
+                config.get('augmentation_fn', DEFAULT_AUGMENTATION)
+            )
             self.threshold_spin.setValue(
                 config.get('threshold', DEFAULT_THRESHOLD)
             )
@@ -325,6 +339,7 @@ class MainWindow(QMainWindow):
             'input_dir': self.input_dir_edit.text(),
             'output_dir': self.output_dir_edit.text(),
             'model_name': self.model_name_combo.currentText(),
+            'augmentation_fn': self.augmentation_combo.currentText(),
             'threshold': self.threshold_spin.value(),
             'overlay_color': list(self.overlay_color),
             'overlay_strength': self.overlay_strength_spin.value(),
@@ -451,6 +466,7 @@ class MainWindow(QMainWindow):
             input_dir=input_dir,
             output_dir=output_dir,
             model_name=self.model_name_combo.currentText(),
+            augmentation_fn_name=self.augmentation_combo.currentText(),
             threshold=self.threshold_spin.value(),
             overlay_color=self.overlay_color,
             overlay_strength=self.overlay_strength_spin.value(),
