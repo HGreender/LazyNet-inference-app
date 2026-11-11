@@ -1,7 +1,7 @@
 """Константы и конфигурация приложения."""
 
 # Поддерживаемые расширения изображений
-IMAGE_EXTENSIONS = ('.png', '.jpg', '.jpeg', '.bmp', '.tif')
+IMAGE_EXTENSIONS = ('.png', '.jpg', '.jpeg', '.bmp', '.tif', '.webp')
 
 # Параметры по умолчанию для инференса
 DEFAULT_THRESHOLD = 0.5

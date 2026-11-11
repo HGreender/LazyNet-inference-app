@@ -212,7 +212,7 @@ class InferenceWorker(QThread):
 
         self.lazynet.model.eval()
 
-        valid_extensions = ('.png', '.jpg', '.jpeg', '.bmp', '.tif')
+        valid_extensions = ('.png', '.jpg', '.jpeg', '.bmp', '.tif', '.webp')
         all_files = [
             os.path.join(self.input_dir, f)
             for f in os.listdir(self.input_dir)

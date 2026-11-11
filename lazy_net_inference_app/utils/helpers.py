@@ -34,7 +34,7 @@ def validate_image_folder(path: str) -> Tuple[bool, str, int]:
     if not path_obj.is_dir():
         return False, f"Указанный путь не является папкой: {path}", 0
 
-    valid_extensions = ('.png', '.jpg', '.jpeg', '.bmp', '.tif')
+    valid_extensions = ('.png', '.jpg', '.jpeg', '.bmp', '.tif', '.webp')
     images = [
         f for f in os.listdir(path)
         if f.lower().endswith(valid_extensions)
@@ -60,7 +60,7 @@ def validate_output_folder(path: str) -> Tuple[bool, str]:
 
 def get_image_list(folder: str) -> List[str]:
     """Получает список путей к изображениям в папке."""
-    valid_extensions = ('.png', '.jpg', '.jpeg', '.bmp', '.tif')
+    valid_extensions = ('.png', '.jpg', '.jpeg', '.bmp', '.tif', '.webp')
     images = []
 
     for f in sorted(os.listdir(folder)):
