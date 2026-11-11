@@ -3,7 +3,7 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QSizePolicy
 )
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt, QSize, pyqtSignal
 from PyQt6.QtGui import QPixmap
 import os
 
@@ -27,13 +27,13 @@ class PreviewWidget(QWidget):
         # Область для отображения изображения
         self.image_label = QLabel("Нет изображений для просмотра")
         self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.image_label.setMinimumSize(400, 400)
-        self.image_label.setStyleSheet("""
-            QLabel {
-                border: 2px solid #ccc;
-                background-color: #f5f5f5;
-            }
-        """)
+        self.image_label.setMinimumSize(220, 220)
+        self.image_label.setStyleSheet(
+            "background-color: #101218;"
+            "border: 1px dashed #2C3242;"
+            "border-radius: 12px;"
+            "color: #8A93A8;"
+        )
         self.image_label.setSizePolicy(
             QSizePolicy.Policy.Expanding,
             QSizePolicy.Policy.Expanding
@@ -42,20 +42,36 @@ class PreviewWidget(QWidget):
 
         # Панель навигации
         nav_layout = QHBoxLayout()
+        nav_layout.setSpacing(8)
 
-        self.prev_button = QPushButton("← Предыдущий")
+        self.prev_button = QPushButton("←")
+        self.prev_button.setToolTip("Предыдущее изображение")
+        self.prev_button.setFixedWidth(44)
+        self.prev_button.setProperty("kind", "ghost")
         self.prev_button.clicked.connect(self.show_previous)
         self.prev_button.setEnabled(False)
 
-        self.next_button = QPushButton("Следующий →")
+        self.next_button = QPushButton("→")
+        self.next_button.setToolTip("Следующее изображение")
+        self.next_button.setFixedWidth(44)
+        self.next_button.setProperty("kind", "ghost")
         self.next_button.clicked.connect(self.show_next)
         self.next_button.setEnabled(False)
 
         self.counter_label = QLabel("0 / 0")
         self.counter_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.counter_label.setStyleSheet(
+            "background-color: #232834;"
+            "border-radius: 10px;"
+            "padding: 3px 14px;"
+            "color: #E9ECF4;"
+            "font-weight: 600;"
+        )
 
         nav_layout.addWidget(self.prev_button)
+        nav_layout.addStretch()
         nav_layout.addWidget(self.counter_label)
+        nav_layout.addStretch()
         nav_layout.addWidget(self.next_button)
 
         layout.addLayout(nav_layout)
@@ -85,9 +101,13 @@ class PreviewWidget(QWidget):
         try:
             pixmap = QPixmap(self.images[index])
 
-            # Масштабируем изображение для отображения
+            # Все изображения вписываются в один и тот же квадрат,
+            # чтобы картинка не меняла размер при переключении.
+            label_size = self.image_label.size()
+            side = max(min(label_size.width(), label_size.height()), 1)
+            target = QSize(side, side)
             scaled_pixmap = pixmap.scaled(
-                self.image_label.size(),
+                target,
                 Qt.AspectRatioMode.KeepAspectRatio,
                 Qt.TransformationMode.SmoothTransformation
             )
@@ -113,9 +133,3 @@ class PreviewWidget(QWidget):
         """Показывает следующее изображение."""
         if self.current_index < len(self.images) - 1:
             self.show_image(self.current_index + 1)
-
-    def resizeEvent(self, event):
-        """Пересчитываем размер при изменении окна."""
-        super().resizeEvent(event)
-        if self.images and 0 <= self.current_index < len(self.images):
-            self.show_image(self.current_index)

@@ -5,9 +5,9 @@ from pathlib import Path
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QGroupBox, QLabel, QLineEdit, QPushButton, QFileDialog,
-    QSpinBox, QDoubleSpinBox, QCheckBox, QComboBox,
+    QSpinBox, QDoubleSpinBox, QCheckBox, QComboBox, QFormLayout,
     QTextEdit, QProgressBar, QSplitter, QMessageBox,
-    QColorDialog
+    QColorDialog, QScrollArea, QSizePolicy
 )
 from PyQt6.QtCore import Qt, QSettings
 from PyQt6.QtGui import QFont
@@ -26,6 +26,7 @@ from utils.helpers import (
     get_image_list, load_config, save_config
 )
 from ui.preview_widget import PreviewWidget
+from ui.theme import make_app_icon
 
 
 class MainWindow(QMainWindow):
@@ -43,17 +44,55 @@ class MainWindow(QMainWindow):
 
     def _init_ui(self):
         """Инициализация пользовательского интерфейса."""
-        self.setWindowTitle("LazyNet Inference App")
+        self.setWindowTitle("LazyNet Inference")
         self.setMinimumSize(1200, 800)
+        self.setWindowIcon(make_app_icon())
 
         # Центральный виджет
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
 
-        main_layout = QHBoxLayout(central_widget)
+        root_layout = QVBoxLayout(central_widget)
+        root_layout.setContentsMargins(16, 14, 16, 10)
+        root_layout.setSpacing(12)
 
-        # Создаем сплиттер для разделения панели управления и предпросмотра
+        # === Шапка приложения ===
+        header = QWidget()
+        header.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        header_layout = QHBoxLayout(header)
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        header_layout.setSpacing(12)
+
+        logo = QLabel()
+        logo.setFixedSize(40, 40)
+        logo.setPixmap(make_app_icon().pixmap(40, 40))
+        header_layout.addWidget(logo)
+
+        title_block = QWidget()
+        title_layout = QVBoxLayout(title_block)
+        title_layout.setContentsMargins(0, 0, 0, 0)
+        title_layout.setSpacing(0)
+
+        title = QLabel("LazyNet Inference")
+        title.setProperty("role", "title")
+        title_layout.addWidget(title)
+
+        subtitle = QLabel("Сегментация изображений · инференс · предпросмотр")
+        subtitle.setProperty("role", "subtitle")
+        title_layout.addWidget(subtitle)
+
+        header_layout.addWidget(title_block)
+        header_layout.addStretch()
+
+        version_chip = QLabel("v1.0")
+        version_chip.setProperty("role", "chip")
+        header_layout.addWidget(version_chip)
+
+        root_layout.addWidget(header)
+
+        # Сплиттер: панель управления и предпросмотр
         splitter = QSplitter(Qt.Orientation.Horizontal)
+        splitter.setHandleWidth(2)
 
         # Левая панель - управление
         control_panel = self._create_control_panel()
@@ -61,18 +100,29 @@ class MainWindow(QMainWindow):
 
         # Правая панель - предпросмотр
         preview_panel = self._create_preview_panel()
+        preview_panel.setMinimumWidth(380)
         splitter.addWidget(preview_panel)
 
-        # Устанавливаем пропорции (70% управление, 30% превью)
-        splitter.setStretchFactor(0, 7)
-        splitter.setStretchFactor(1, 3)
+        # Устанавливаем пропорции (66% управление, 33% превью)
+        splitter.setStretchFactor(0, 2)
+        splitter.setStretchFactor(1, 1)
 
-        main_layout.addWidget(splitter)
+        root_layout.addWidget(splitter)
+
+        # Статус-бар
+        self.statusBar().showMessage("Готов к работе")
 
     def _create_control_panel(self) -> QWidget:
-        """Создает панель управления."""
+        """Создает панель управления (в прокручиваемой области)."""
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
         panel = QWidget()
         layout = QVBoxLayout(panel)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(12)
 
         # === Группа: Выбор модели ===
         model_group = QGroupBox("Модель")
@@ -103,7 +153,8 @@ class MainWindow(QMainWindow):
         self.model_path_edit.setPlaceholderText("Выберите файл модели...")
         model_path_layout.addWidget(self.model_path_edit)
 
-        browse_model_btn = QPushButton("Обзор")
+        browse_model_btn = QPushButton("Обзор…")
+        browse_model_btn.setProperty("kind", "ghost")
         browse_model_btn.clicked.connect(self.browse_model)
         model_path_layout.addWidget(browse_model_btn)
         model_layout.addLayout(model_path_layout)
@@ -121,7 +172,8 @@ class MainWindow(QMainWindow):
         self.input_dir_edit.setPlaceholderText("Папка с изображениями...")
         input_layout.addWidget(self.input_dir_edit)
 
-        browse_input_btn = QPushButton("Обзор")
+        browse_input_btn = QPushButton("Обзор…")
+        browse_input_btn.setProperty("kind", "ghost")
         browse_input_btn.clicked.connect(self.browse_input_folder)
         input_layout.addWidget(browse_input_btn)
         data_layout.addLayout(input_layout)
@@ -133,7 +185,8 @@ class MainWindow(QMainWindow):
         self.output_dir_edit.setPlaceholderText("Папка для результатов...")
         output_layout.addWidget(self.output_dir_edit)
 
-        browse_output_btn = QPushButton("Обзор")
+        browse_output_btn = QPushButton("Обзор…")
+        browse_output_btn.setProperty("kind", "ghost")
         browse_output_btn.clicked.connect(self.browse_output_folder)
         output_layout.addWidget(browse_output_btn)
         data_layout.addLayout(output_layout)
@@ -142,62 +195,74 @@ class MainWindow(QMainWindow):
 
         # === Группа: Параметры инференса ===
         params_group = QGroupBox("Параметры инференса")
-        params_layout = QVBoxLayout(params_group)
+        form = QFormLayout(params_group)
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        form.setSpacing(10)
 
         # Threshold
-        threshold_layout = QHBoxLayout()
-        threshold_layout.addWidget(QLabel("Threshold:"))
         self.threshold_spin = QDoubleSpinBox()
         self.threshold_spin.setRange(0.0, 1.0)
         self.threshold_spin.setSingleStep(0.05)
         self.threshold_spin.setValue(DEFAULT_THRESHOLD)
-        threshold_layout.addWidget(self.threshold_spin)
-        params_layout.addLayout(threshold_layout)
+        self._limit_spin_width(self.threshold_spin)
+        form.addRow("Threshold:", self.threshold_spin)
 
         # Overlay color
-        color_layout = QHBoxLayout()
-        color_layout.addWidget(QLabel("Цвет оверлея:"))
-        self.overlay_color_btn = QPushButton("Выбрать цвет")
-        self.overlay_color_btn.setStyleSheet(
-            f"background-color: rgb{DEFAULT_OVERLAY_COLOR}; color: white;"
-        )
+        color_row = QWidget()
+        color_layout = QHBoxLayout(color_row)
+        color_layout.setContentsMargins(0, 0, 0, 0)
+        color_layout.setSpacing(10)
+        self.overlay_color_swatch = QLabel()
+        self.overlay_color_swatch.setFixedSize(56, 32)
+        self.overlay_color_swatch.setToolTip("Цвет оверлея")
+        self.overlay_color_btn = QPushButton("Выбрать цвет…")
+        self.overlay_color_btn.setProperty("kind", "ghost")
         self.overlay_color_btn.clicked.connect(self.choose_overlay_color)
         color_layout.addWidget(self.overlay_color_btn)
+        color_layout.addWidget(self.overlay_color_swatch)
         self.overlay_color_label = QLabel(f"RGB: {DEFAULT_OVERLAY_COLOR}")
+        self.overlay_color_label.setProperty("role", "muted")
         color_layout.addWidget(self.overlay_color_label)
-        params_layout.addLayout(color_layout)
+        color_layout.addStretch()
+        form.addRow("Цвет оверлея:", color_row)
 
         # Overlay strength
-        strength_layout = QHBoxLayout()
-        strength_layout.addWidget(QLabel("Прозрачность оверлея:"))
         self.overlay_strength_spin = QDoubleSpinBox()
         self.overlay_strength_spin.setRange(0.0, 1.0)
         self.overlay_strength_spin.setSingleStep(0.05)
         self.overlay_strength_spin.setValue(DEFAULT_OVERLAY_STRENGTH)
-        strength_layout.addWidget(self.overlay_strength_spin)
-        params_layout.addLayout(strength_layout)
+        self._limit_spin_width(self.overlay_strength_spin)
+        form.addRow("Прозрачность оверлея:", self.overlay_strength_spin)
 
         # Batch size и workers
-        perf_layout = QHBoxLayout()
+        perf_row = QWidget()
+        perf_layout = QHBoxLayout(perf_row)
+        perf_layout.setContentsMargins(0, 0, 0, 0)
+        perf_layout.setSpacing(8)
+
         perf_layout.addWidget(QLabel("Batch size:"))
         self.batch_size_spin = QSpinBox()
         self.batch_size_spin.setRange(1, 200)
         self.batch_size_spin.setValue(DEFAULT_BATCH_SIZE)
+        self._limit_spin_width(self.batch_size_spin, 72)
         perf_layout.addWidget(self.batch_size_spin)
 
         perf_layout.addWidget(QLabel("Workers:"))
         self.num_workers_spin = QSpinBox()
         self.num_workers_spin.setRange(0, 16)
         self.num_workers_spin.setValue(DEFAULT_NUM_WORKERS)
+        self._limit_spin_width(self.num_workers_spin, 72)
         perf_layout.addWidget(self.num_workers_spin)
 
         perf_layout.addWidget(QLabel("Save workers:"))
         self.save_workers_spin = QSpinBox()
         self.save_workers_spin.setRange(1, 16)
         self.save_workers_spin.setValue(DEFAULT_SAVE_WORKERS)
+        self._limit_spin_width(self.save_workers_spin, 72)
         perf_layout.addWidget(self.save_workers_spin)
 
-        params_layout.addLayout(perf_layout)
+        perf_layout.addStretch()
+        form.addRow("Производительность:", perf_row)
 
         layout.addWidget(params_group)
 
@@ -221,20 +286,25 @@ class MainWindow(QMainWindow):
 
         # === Кнопки управления ===
         buttons_layout = QHBoxLayout()
+        buttons_layout.setSpacing(10)
 
         self.load_model_btn = QPushButton("Загрузить модель")
         self.load_model_btn.clicked.connect(self.load_model)
         buttons_layout.addWidget(self.load_model_btn)
 
-        self.run_btn = QPushButton("Запустить инференс")
+        self.run_btn = QPushButton("▶  Запустить инференс")
+        self.run_btn.setProperty("kind", "primary")
         self.run_btn.clicked.connect(self.run_inference)
         self.run_btn.setEnabled(False)  # Отключена пока модель не загружена
         buttons_layout.addWidget(self.run_btn)
 
-        self.cancel_btn = QPushButton("Отмена")
+        self.cancel_btn = QPushButton("✕  Отмена")
+        self.cancel_btn.setProperty("kind", "danger")
         self.cancel_btn.clicked.connect(self.cancel_inference)
         self.cancel_btn.setEnabled(False)
         buttons_layout.addWidget(self.cancel_btn)
+
+        buttons_layout.addStretch()
 
         layout.addLayout(buttons_layout)
 
@@ -249,7 +319,8 @@ class MainWindow(QMainWindow):
 
         self.log_text = QTextEdit()
         self.log_text.setReadOnly(True)
-        self.log_text.setMaximumHeight(200)
+        self.log_text.setFixedHeight(600)
+        self.log_text.setFont(QFont("JetBrains Mono", 9))
         log_layout.addWidget(self.log_text)
 
         layout.addWidget(log_group)
@@ -257,31 +328,48 @@ class MainWindow(QMainWindow):
         # Добавляем растягивающий элемент внизу
         layout.addStretch()
 
-        return panel
+        scroll.setWidget(panel)
+        return scroll
 
     def _create_preview_panel(self) -> QWidget:
         """Создает панель предпросмотра."""
         panel = QWidget()
         layout = QVBoxLayout(panel)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
 
         # Заголовок
         header = QLabel("Предпросмотр результатов")
-        header.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        header.setProperty("role", "section")
         layout.addWidget(header)
 
         # Виджет галереи
         self.preview_widget = PreviewWidget()
         layout.addWidget(self.preview_widget)
 
+        # Нижняя секция: чекбокс + обновление.
+        # Сдвинута вправо, чтобы не налезать на границу соседнего блока.
+        bottom = QWidget()
+        bottom_layout = QVBoxLayout(bottom)
+        bottom_layout.setContentsMargins(14, 0, 0, 0)
+        bottom_layout.setSpacing(10)
+
         # Чекбокс включения предпросмотра
         self.enable_preview_check = QCheckBox("Включить предпросмотр")
         self.enable_preview_check.setChecked(True)
-        layout.addWidget(self.enable_preview_check)
+        bottom_layout.addWidget(self.enable_preview_check)
 
         # Кнопка обновления галереи
-        refresh_btn = QPushButton("Обновить галерею")
+        refresh_row = QHBoxLayout()
+        refresh_btn = QPushButton("↻  Обновить галерею")
+        refresh_btn.setProperty("kind", "ghost")
         refresh_btn.clicked.connect(self.refresh_preview)
-        layout.addWidget(refresh_btn)
+        refresh_row.addWidget(refresh_btn)
+        refresh_row.addStretch()
+        bottom_layout.addLayout(refresh_row)
+
+        layout.addWidget(bottom)
+        layout.addStretch()
 
         return panel
 
@@ -404,12 +492,22 @@ class MainWindow(QMainWindow):
             rgb = (color.red(), color.green(), color.blue())
             self._set_overlay_color(rgb)
 
+    def _style_overlay_color_button(self):
+        """Стилизовывает свотч цвета оверлея."""
+        self.overlay_color_swatch.setStyleSheet(
+            f"background-color: rgb{self.overlay_color}; "
+            f"border: 2px solid #3A4155; border-radius: 8px;"
+        )
+
+    @staticmethod
+    def _limit_spin_width(spin, width: int = 130):
+        """Ограничивает ширину спинбокса, чтобы он не растягивался на всю строку."""
+        spin.setMaximumWidth(width)
+
     def _set_overlay_color(self, rgb: tuple):
         """Устанавливает цвет оверлея."""
         self.overlay_color = rgb
-        self.overlay_color_btn.setStyleSheet(
-            f"background-color: rgb{rgb}; color: white;"
-        )
+        self._style_overlay_color_button()
         self.overlay_color_label.setText(f"RGB: {rgb}")
 
     # === Методы управления моделью ===
@@ -436,8 +534,9 @@ class MainWindow(QMainWindow):
 
         # Активируем кнопку запуска
         self.run_btn.setEnabled(True)
-        self.load_model_btn.setText("Модель выбрана")
+        self.load_model_btn.setText("✓  Модель выбрана")
         self.load_model_btn.setEnabled(False)
+        self.statusBar().showMessage("Модель готова к загрузке")
 
     # === Методы инференса ===
 
@@ -491,6 +590,7 @@ class MainWindow(QMainWindow):
 
         self.run_btn.setEnabled(False)
         self.cancel_btn.setEnabled(True)
+        self.statusBar().showMessage("Выполняется инференс…")
 
         # Настройка прогресс-бара
         self.progress_bar.setVisible(True)
@@ -528,6 +628,7 @@ class MainWindow(QMainWindow):
 
         if success:
             self.log(message)
+            self.statusBar().showMessage("Инференс завершён")
             QMessageBox.information(self, "Успех", "Инференс завершен успешно!")
 
             # Обновляем предпросмотр если включен
@@ -535,6 +636,7 @@ class MainWindow(QMainWindow):
                 self.refresh_preview()
         else:
             self.log(f"Ошибка: {message}")
+            self.statusBar().showMessage("Ошибка при инференсе")
             QMessageBox.critical(self, "Ошибка", message)
 
         self.worker = None
@@ -545,6 +647,7 @@ class MainWindow(QMainWindow):
         self.run_btn.setEnabled(True)
         self.cancel_btn.setEnabled(False)
         self.log("Операция отменена пользователем")
+        self.statusBar().showMessage("Операция отменена")
         self.worker = None
 
     def refresh_preview(self):

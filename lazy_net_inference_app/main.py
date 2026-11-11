@@ -2,14 +2,15 @@
 import sys
 from PyQt6.QtWidgets import QApplication
 from ui.main_window import MainWindow
+from ui.theme import apply_theme
 
 
 def main():
     """Запуск приложения."""
     app = QApplication(sys.argv)
 
-    # Устанавливаем стиль приложения (опционально)
-    app.setStyle("Fusion")
+    # Тёмная тема оформления
+    apply_theme(app)
 
     window = MainWindow()
     window.show()
