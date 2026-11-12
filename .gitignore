@@ -42,7 +42,6 @@ predictions/
 *.pth
 
 drafts/
-my_libs/
 data/
 
 config.json
